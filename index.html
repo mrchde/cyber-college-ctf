@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<title>E-CORP PENTEST TERMINAL</title>
+
+<script>
+(function() {
+    try {
+        const safeAlert = function(msg) {
+            console.group("%c⚠️ [BROWSER INTERCEPT]", "background: #c00; color: white; padding: 2px 6px; border-radius: 3px; font-weight: bold;");
+            console.log(`%cPopup Content: "${msg}"`, "color: #ff9999; font-size: 14px;");
+            console.log("%c(Native window suppressed)", "color: gray; font-style: italic;");
+            console.groupEnd();
+            return true;
+        };
+        Object.defineProperty(window, 'alert', { value: safeAlert, writable: false });
+        Object.defineProperty(window, 'confirm', { value: () => true, writable: false });
+        Object.defineProperty(window, 'prompt', { value: () => "admin", writable: false });
+        console.log("%c🛡️ Anti-Popup System Active", "color: green; font-weight: bold;");
+    } catch (e) {
+        console.error("Anti-Popup failed:", e);
+    }
+})();
+</script>
+
+<style>
+    body {
+        background-color: #111;
+        margin: 0;
+        height: 100vh;
+        overflow: hidden;
+        font-family: 'Consolas', 'Monaco', monospace;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: #cccccc;
+    }
+
+    /* ЗМЕНШЕНИЙ ТЕРМІНАЛ */
+    .terminal-window {
+        width: 700px;  /* Фіксована ширина */
+        height: 500px; /* Фіксована висота */
+        background: #1e1e1e;
+        border: 1px solid #444;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        display: flex;
+        flex-direction: column;
+        border-radius: 6px;
+    }
+
+    .header-bar {
+        background: #2d2d2d;
+        padding: 8px 15px;
+        font-size: 13px;
+        color: #bbb;
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 1px solid #333;
+        border-radius: 5px 5px 0 0;
+        user-select: none;
+    }
+
+    .console-output {
+        flex-grow: 1;
+        padding: 15px;
+        overflow-y: auto;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #d4d4d4;
+    }
+
+    .console-output p { margin: 4px 0; }
+
+    .status-line {
+        background: #007acc;
+        color: white;
+        padding: 4px 10px;
+        font-size: 11px;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #1e1e1e; }
+    ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+
+    code {
+        font-family: 'Consolas', monospace;
+        background: #2d2d2d;
+        padding: 2px 5px;
+        border-radius: 3px;
+        color: #ce9178;
+    }
+</style>
+</head>
+<body>
+
+<div class="terminal-window">
+    <div class="header-bar">
+        <span>root@pentest-box:~</span>
+        <span>E-CORP TOOLKIT v3.2</span>
+    </div>
+    <div class="console-output" id="output">
+        <p style="color: #569cd6">Initializing connection...</p>
+        <p>Connected to 192.168.1.15.</p>
+        <br>
+        <p><b>[TASK]</b> Провести аудит безпеки E-CORP.</p>
+        <p><b>[GOAL]</b> Отримати вихідний код <code>index.html</code>.</p>
+        <br>
+        <p>> Використовуйте <span style="color: #ce9178">Console (F12)</span>.</p>
+        <p>> Введіть <code>sys.init()</code> для старту.</p>
+        <p>> Введіть <code>sys.help()</code> для списку команд.</p>
+    </div>
+    <div class="status-line">
+        <span id="status-text">IDLE</span>
+        <span>UTF-8</span>
+    </div>
+</div>
+
+<script>
+(function(){
+    if (window.__PENTEST_INIT) return;
+    window.__PENTEST_INIT = true;
+
+    let current = 1;
+
+    const s = {
+        cmd: "color: #9cdcfe; font-weight: bold;",
+        str: "color: #ce9178;",
+        comment: "color: #6a9955; font-style: italic;",
+        err: "color: #f44747;",
+        success: "color: #b5cea8; font-weight: bold;",
+        keyword: "color: #c586c0;",
+        bg: "background: #222; padding: 2px;"
+    };
+
+    const levels = [
+        {
+            id: 1,
+            name: "Auth Bypass (SQLi)",
+            endpoint: "/api/auth/login",
+            desc: "Форма входу вразлива до SQL Injection. Ми можемо змінити логіку запиту, щоб він завжди повертав правду.",
+            vulnHint: `query = "SELECT * FROM users WHERE pass = '" + input + "'";`,
+            fn: "login",
+            hint: "Напиши запит, який робить умову істинною. Використай: ' OR 1=1 --",
+            details: "Символ ' закриває рядок пароля. OR 1=1 робить умову істинною для всіх рядків. -- коментує решту запиту.",
+            check: p => /or\s+1=1/i.test(p) || /--/.test(p) || /#/.test(p)
+        },
+        {
+            id: 2,
+            name: "Session Hijacking (XSS)",
+            endpoint: "/support/ticket",
+            desc: "Reflected XSS: Сервер відображає введене повідомлення без фільтрації. Це дозволяє виконати JS код.",
+            vulnHint: `<div>User message: {input}</div>`,
+            fn: "sendTicket",
+            hint: "Встав HTML тег, який виконує JavaScript. Наприклад: <script>alert(1)<\/script>",
+            details: "Браузер бачить тег <script> і виконує код всередині. Це дозволяє красти куки (document.cookie).",
+            check: p => /<script|onerror|alert|document\.cookie/i.test(p)
+        },
+        {
+            id: 3,
+            name: "Privilege Escalation (IDOR)",
+            endpoint: "/api/user/profile",
+            desc: "IDOR: Сервер не перевіряє, чи належить ID користувачу. Можна отримати доступ до чужого профілю.",
+            vulnHint: `// Server just takes ID and returns data\nreturn db.get_user(request.id)`,
+            fn: "getProfile",
+            hint: "Твій ID=105 (Гість). Адміни зазвичай мають ID=1 або ID=0.",
+            details: "Просто зміни параметр ID у функції на 0 або 1.",
+            check: id => Number(id) === 1 || Number(id) === 0
+        },
+        {
+            id: 4,
+            name: "File Disclosure (LFI)",
+            endpoint: "/system/logs",
+            desc: "Path Traversal: Додаток дозволяє читати файли за вказаним шляхом без перевірки папки.",
+            vulnHint: `path = "/var/www/logs/" + filename`,
+            fn: "readLog",
+            hint: "Тобі треба вийти з папки 'logs' на рівень вище. Використай '../index.html'",
+            details: "'..' в шляху означає 'батьківська директорія'. Це дозволяє вийти за межі дозволеної папки.",
+            check: p => p.includes("..")
+        }
+    ];
+
+    function log(msg, style = "") { console.log(`%c${msg}`, style); }
+    function serverLog(code, msg) { console.log(`%c[SERVER] HTTP ${code} ${msg}`, code===200 ? s.success : s.err); }
+
+    function renderCodePreview(codeSnippet) {
+        console.groupCollapsed("%c🔎 [ВРАЗЛИВИЙ КОД] - Натисни, щоб подивитись", s.comment);
+        console.log(`%c${codeSnippet}`, "color: #d4d4d4; background: #1e1e1e; padding: 10px; display: block; font-family: monospace;");
+        console.groupEnd();
+    }
+
+    function showLevel() {
+        if (current > levels.length) {
+            console.clear();
+            console.log("%c 🎉 PENTEST COMPLETE. ", "background: green; color: white; font-size: 20px; padding: 10px;");
+            document.getElementById('status-text').innerText = "DONE";
+            return;
+        }
+        const L = levels[current-1];
+        console.log(`%c\n--- [LEVEL ${current}] ${L.name} ---`, "color: white; font-weight: bold; border-bottom: 1px solid #555;");
+        log(`> Endpoint: ${L.endpoint}`, s.keyword);
+        log(`> Info: ${L.desc}`);
+
+        if(L.vulnHint) renderCodePreview(L.vulnHint);
+
+        log(`\nДоступна команда: sys.${L.fn}(payload)`, s.cmd);
+        log(`(Введи sys.hint() якщо потрібна допомога)`, "color: gray; font-size: 10px;");
+
+        document.getElementById('status-text').innerText = `MOD: ${L.name}`;
+    }
+
+    function next() {
+        log(`\n[+] Успіх. Завантаження наступного модуля...`, s.success);
+        current++;
+        setTimeout(showLevel, 1500);
+    }
+
+    function fail(reason) { log(`[-] Помилка: ${reason}`, s.err); }
+
+    function init() {
+        current = 1;
+        console.clear();
+        log("Завантаження модулів...", s.comment);
+        setTimeout(showLevel, 1000);
+    }
+
+    // Нова функція підказок
+    function hint() {
+        if (current > levels.length) return;
+        const L = levels[current-1];
+        console.log(`%c💡 ПІДКАЗКА: ${L.hint}`, "color: yellow; font-weight: bold;");
+        console.log(`%c📖 ДЕТАЛІ: ${L.details}`, "color: #aaa; font-style: italic;");
+    }
+
+    function help() {
+        console.log("%cДоступні команди:", "color: white; font-weight: bold;");
+        console.log("  sys.init()       - Перезапустити гру");
+        console.log("  sys.hint()       - Отримати підказку для рівня");
+        console.log("  sys.help()       - Це меню");
+        console.log("  ---------------------------------");
+        levels.forEach(l => {
+             console.log(`  sys.${l.fn}(...) - ${l.name}`);
+        });
+    }
+
+    // --- LEVEL LOGIC ---
+
+    function login(payload) {
+        if(levels[current-1].id !== 1) return fail("Не той модуль.");
+        console.group("SQL Query Executed:");
+        log(`SELECT * FROM users WHERE pass = '${payload}'`, s.str);
+        if(levels[0].check(payload)) {
+            log("✅ SQLi Success: Авторизовано як Admin", s.success);
+            console.groupEnd();
+            next();
+        } else {
+            log("❌ Access Denied", s.err);
+            console.groupEnd();
+            fail("Запит повернув false");
+        }
+    }
+
+    function sendTicket(payload) {
+        if(levels[current-1].id !== 2) return fail("Не той модуль.");
+        console.group("Admin Browser View:");
+        log(`Rendered HTML: ${payload}`, "color: gray");
+
+        if(levels[1].check(payload)) {
+            log("⚠️ XSS Detected!", "color: orange");
+            if(payload.includes("alert")) window.alert("XSS!");
+            log("✅ Cookies Stolen successfully", s.success);
+            console.groupEnd();
+            next();
+        } else {
+            log("❌ Безпечний рендер (код не виконався)", s.comment);
+            console.groupEnd();
+            fail("JS не спрацював");
+        }
+    }
+
+    function getProfile(id) {
+        if(levels[current-1].id !== 3) return fail("Не той модуль.");
+        log(`GET /api/user/${id}`, s.cmd);
+        if(levels[2].check(id)) {
+            log("✅ Дані Адміна отримано!", s.success);
+            next();
+        } else {
+            log("❌ Дані Гостя (Guest)", s.err);
+            fail("Потрібен ID адміна");
+        }
+    }
+
+    function readLog(filename) {
+        if(levels[current-1].id !== 4) return fail("Не той модуль.");
+
+        const path = "/var/www/logs/" + filename;
+        console.log(`%c[SYSTEM] Reading: ${path}`, s.comment);
+
+        if(!levels[3].check(filename)) {
+            serverLog(404, "File not found");
+            fail("Файл має бути за межами /logs/ (використай ../)");
+            return;
+        }
+
+        if(filename.includes("index.html")) {
+            serverLog(200, "OK");
+            log("✅ ФАЙЛ ОТРИМАНО:", s.success);
+            console.group("%c📄 SOURCE CODE (index.html)", "color: black; background: #00ff41; padding: 2px 5px;");
+            console.log(document.documentElement.outerHTML);
+            console.groupEnd();
+            next();
+        } else {
+            serverLog(200, "OK");
+            log(`[Binary content]`, "color: gray");
+            log("❌ Це не index.html", s.err);
+        }
+    }
+
+    window.sys = { init, login, sendTicket, getProfile, readLog, hint, help };
+    console.log("%c System Ready. Type sys.init()", "background: #007acc; color: white; padding: 4px;");
+
+})();
+</script>
+</body>
+</html>
