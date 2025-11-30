@@ -166,7 +166,18 @@ const query = "SELECT * ... WHERE pass = '" + input + "'";
             name: "Session Hijacking (XSS)",
             endpoint: "/support/ticket",
             desc: "Reflected XSS: Сервер відображає введене повідомлення без фільтрації. Це дозволяє виконати JS код.",
-            vulnHint: `<div>User message: {input}</div>`,
+            vulnHint: `// ⚠️ ВРАЗЛИВИЙ КОД:
+// Сервер вставляє твій текст прямо в HTML сторінки:
+const pageHTML = "<div>User message: " + input + "</div>";
+
+// 👇 Якщо ввести: <script>alert(1)<\/script>
+// То HTML стане: <div>User message: <script>alert(1)<\/script></div>
+
+// 💡 ПОЯСНЕННЯ:
+// Браузер бачить тег <script> і думає, що це частина програми.
+// Він не показує текст "<script>", а мовчки ВИКОНУЄ код всередині.
+// Це дає повний контроль над вкладкою жертви (крадіжка куків, редірект тощо).
+`,
             fn: "sendTicket",
             hint: "Встав HTML тег, який виконує JavaScript. Наприклад: <script>alert(1)<\/script>",
             details: "Браузер бачить тег <script> і виконує код всередині. Це дозволяє красти куки (document.cookie).",
@@ -378,14 +389,56 @@ const query = "SELECT * ... WHERE pass = '" + input + "'";
             fail("Файл має бути за межами /logs/ (використай ../)");
             return;
         }
-
         if(filename.includes("index.html")) {
             serverLog(200, "OK");
             log("✅ ФАЙЛ ОТРИМАНО:", s.success);
-            console.group("%c📄 SOURCE CODE (index.html)", "color: black; background: #00ff41; padding: 2px 5px;");
-            console.log(document.documentElement.outerHTML);
-            console.groupEnd();
-            next();
+
+            // Драматичні логи перед "зламуванням"
+            setTimeout(() => log("⚠️ SYSTEM CRITICAL ERROR: MEMORY CORRUPTION DETECTED", "color: red; font-weight: bold; font-size: 14px;"), 500);
+            setTimeout(() => log("🔄 OVERRIDE SEQUENCE INITIATED...", "color: orange;"), 1500);
+
+            // Запускаємо відео через 2.5 секунди
+                setTimeout(() => {
+                const video = document.createElement('video');
+
+                // Ваше посилання на S3
+                video.src = "https://ecorp-assets-video-123.s3.eu-north-1.amazonaws.com/video.mp4";
+
+                // ⚠️ ВАЖЛИВО: Щоб обійти блокування браузера
+                video.muted = true; // Спочатку без звуку
+                video.autoplay = true;
+                video.controls = false;
+                video.loop = true;
+
+                // Стилі на весь екран
+                video.style.position = "fixed";
+                video.style.top = "0";
+                video.style.left = "0";
+                video.style.width = "100vw";
+                video.style.height = "100vh";
+                video.style.zIndex = "9999";
+                video.style.background = "black";
+                video.style.objectFit = "cover";
+
+                document.body.appendChild(video);
+
+                // Запускаємо відео (воно піде без звуку, помилки не буде)
+                video.play().then(() => {
+                    // Виводимо велике повідомлення в консоль
+                    console.clear();
+                    log("⚠️ SYSTEM HACKED!", "color: red; font-size: 40px; font-weight: bold; background: black; padding: 10px;");
+                    log("НЕ НАЖИМАЙТЕ НА ЕКРАН!!!!!!!!!!!!", "color: yellow; font-size: 20px;");
+
+                    // Додаємо подію: перший клік по екрану вмикає звук
+                    document.body.addEventListener('click', () => {
+                        video.muted = false;
+                        video.volume = 1.0;
+                    }, { once: true }); // Спрацює тільки один раз
+                }).catch(e => {
+                    console.error("Autoplay fail:", e);
+                });
+
+            }, 2500)
         } else {
             serverLog(200, "OK");
             log(`[Binary content]`, "color: gray");
