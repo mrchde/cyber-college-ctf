@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>E-CORP PENTEST TERMINAL</title>
-<link rel="icon" type="image/x-icon" href="./favicon.ico">
+
 <script>
 (function() {
     try {
@@ -188,7 +188,22 @@ const pageHTML = "<div>User message: " + input + "</div>";
             name: "Privilege Escalation (IDOR)",
             endpoint: "/api/user/profile",
             desc: "IDOR: Сервер не перевіряє, чи належить ID користувачу. Можна отримати доступ до чужого профілю.",
-            vulnHint: `// Server just takes ID and returns data\nreturn db.get_user(request.id)`,
+            vulnHint: `// ⚠️ ВРАЗЛИВИЙ КОД (Backend):
+function getUserProfile(requested_id) {
+
+    // ❌ ПОМИЛКА БЕЗПЕКИ:
+    // Сервер бачить, що ти залогінений, АЛЕ...
+    // Він НЕ перевіряє, чи належить цей ID тобі.
+
+    // 👇 Він просто сліпо довіряє твоєму запиту:
+    return db.query("SELECT * FROM users WHERE id = " + requested_id);
+}
+
+// 💡 ПОЯСНЕННЯ:
+// Твій реальний ID = 105.
+// Але ти просиш профіль ID = 1 (sys.getProfile(1)).
+// Оскільки перевірки "if (requested_id == my_id)" немає,
+// база даних слухняно віддає тобі анкету Адміна.`,
             fn: "getProfile",
             hint: "Твій ID=105 (Гість). Адміни зазвичай мають ID=1 або ID=0.",
             details: "Просто зміни параметр ID у функції на 0 або 1.",
@@ -198,11 +213,31 @@ const pageHTML = "<div>User message: " + input + "</div>";
             id: 4,
             name: "File Disclosure (LFI)",
             endpoint: "/system/logs",
-            desc: "Path Traversal: Додаток дозволяє читати файли за вказаним шляхом без перевірки папки.",
-            vulnHint: `path = "/var/www/logs/" + filename`,
+            desc: "Path Traversal: Додаток дозволяє читати файли серверу, просто склеюючи шлях до папки з вашим вводом.",
+            vulnHint: `// ⚠️ ВРАЗЛИВИЙ КОД (Backend):
+const fs = require('fs');
+
+function readServerLog(userInput) {
+    // Сервер очікує, що ти введеш назву логу (наприклад, "error.txt")
+    // Він жорстко задає папку, де шукати файли:
+    const basePath = "/var/www/logs/";
+
+    // ❌ ПОМИЛКА: Ввід просто "приклеюється" до шляху без перевірки
+    const finalPath = basePath + userInput;
+
+    return fs.readFileSync(finalPath);
+}
+
+// 💡 ЯК ЦЕ ПРАЦЮЄ:
+// 1. Нормальний запит: "error.txt" -> "/var/www/logs/error.txt"
+// 2. Твій злом: "../index.html"
+// 3. Результат: "/var/www/logs/../index.html"
+//
+// Система бачить "..", розуміє "повернутися назад",
+// виходить з папки /logs/ і читає /var/www/index.html`,
             fn: "readLog",
-            hint: "Тобі треба вийти з папки 'logs' на рівень вище. Використай '../index.html'",
-            details: "'..' в шляху означає 'батьківська директорія'. Це дозволяє вийти за межі дозволеної папки.",
+            hint: "Спробуй піднятися на рівень вище, використовуючи спецсимволи '..'. Спробуй: '../index.html'",
+            details: "У Linux/Windows '..' означає батьківську папку. Це як натиснути кнопку 'Вгору' у провіднику файлів.",
             check: p => p.includes("..")
         }
     ];
@@ -350,15 +385,49 @@ const pageHTML = "<div>User message: " + input + "</div>";
 
     function sendTicket(payload) {
         if(levels[current-1].id !== 2) return fail("Не той модуль.");
+
         console.group("Admin Browser View:");
         log(`Rendered HTML: ${payload}`, "color: gray");
 
+        // Перевірка на успішну XSS атаку
         if(levels[1].check(payload)) {
-            log("⚠️ XSS Detected!", "color: orange");
-            if(payload.includes("alert")) window.alert("XSS!");
-            log("✅ Cookies Stolen successfully", s.success);
-            console.groupEnd();
-            next();
+            log("⚠️ XSS Detected!", "color: orange; font-weight: bold;");
+
+            // Якщо юзер використав alert, просто логуємо це, щоб не блокувати гру
+            if(payload.includes("alert")) {
+                 console.log("%c[BROWSER] Executing malicious script...", s.comment);
+            }
+
+            log("✅ Cookies Stolen successfully: session_id=aef45...", s.success);
+
+            // --- ПОЧАТОК НОВОЇ ЛОГІКИ ---
+            const stolenKey = localStorage.getItem("pentest_ai_key");
+if (stolenKey) {
+                // Драматична затримка
+                setTimeout(() => {
+                    console.group("%c☠️ CRITICAL DATA EXFILTRATION", "background: #c00; color: white; padding: 4px; font-weight: bold;");
+
+                    log("\n[!] УВАГА! Оскільки XSS дозволяє виконувати будь-який JS код...", "color: orange");
+                    log("[!] Зловмисник отримав доступ до LocalStorage!", "color: orange");
+
+                    log(`🔓 СЕКРЕТНИЙ КЛЮЧ КОМПРОМЕТОВАНО:`, s.err);
+
+                    // 🔥 ЗМІНА ТУТ: Виводимо stolenKey напряму, без маскування
+                    console.log("%c -> AI API KEY: " + stolenKey + " <- SENT TO HACKER SERVER", "color: red; background: #220000; font-weight: bold; padding: 5px; border: 1px solid red;");
+
+                    log("\n(Ось чому зберігання секретів у LocalStorage є небезпечним при XSS!)", s.comment);
+                    console.groupEnd();
+                }, 800);
+            }
+            // --- КІНЕЦЬ НОВОЇ ЛОГІКИ ---
+
+            // Перехід на наступний рівень
+            // Якщо ключ вкрали - чекаємо довше (2.5с), якщо ні - швидко (1.5с)
+            setTimeout(() => {
+                console.groupEnd();
+                next();
+            }, stolenKey ? 2500 : 1500);
+
         } else {
             log("❌ Безпечний рендер (код не виконався)", s.comment);
             console.groupEnd();
