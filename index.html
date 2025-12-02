@@ -304,45 +304,42 @@
             this.out.scrollTop = this.out.scrollHeight;
         },
 
-        // 1. Отримання реального IP
-        checkIP: async function() {
-            this.log("NET_SCAN", "Resolving incoming connection origin...", "warning");
-            
-            let ip = null;
+       // 1. Метод JSONP (Обхід CORS та AdBlock)
+        checkIP: function() {
+            this.log("NET_SCAN", "Injecting external script payload (JSONP)...", "warning");
 
-            try {
-                // СПРОБА 1: Cloudflare Trace (Найнадійніший метод для GitHub Pages)
-                // Браузери вважають це звичайним запитом до CDN, а не "трекером"
-                const response = await fetch('https://www.cloudflare.com/cdn-cgi/trace');
-                const text = await response.text();
+            // 1. Створюємо глобальну функцію, яку викличе сервер
+            // Ми робимо її глобальною (window.), щоб завантажений скрипт міг її побачити
+            window.processHackerIP = (data) => {
+                const realIP = data.ip;
                 
-                // Відповідь приходить у вигляді тексту, шукаємо рядок "ip=..."
-                const match = text.match(/ip=(.+)/);
-                if (match) ip = match[1];
+                this.log("ALERT", `UNAUTHORIZED ACCESS DETECTED FROM: ${realIP}`, "critical");
+                this.log("TRACE", `ISP/ASN Lookup initiated for ${realIP}...`, "critical");
                 
-            } catch (e1) {
-                console.warn("Cloudflare trace failed, trying backup...");
-                
-                try {
-                    // СПРОБА 2: Fallback на ipify (якщо перший метод не спрацював)
-                    const response = await fetch('https://api.ipify.org?format=json');
-                    const json = await response.json();
-                    ip = json.ip;
-                } catch (e2) {
-                    console.error("All IP checks failed");
-                }
-            }
-
-            if (ip) {
-                this.log("ALERT", `UNAUTHORIZED ACCESS DETECTED FROM: ${ip}`, "critical");
-                this.log("TRACE", `ISP/ASN Lookup initiated for ${ip}...`, "critical");
-                this.ipDisplay.innerText = `SRC: ${ip}`;
+                this.ipDisplay.innerText = `SRC: ${realIP}`;
                 this.ipDisplay.style.color = "#f00";
-            } else {
-                // Якщо все заблоковано (дуже суворий корпоративний фаєрвол)
-                this.log("NET_WARN", "External tracing blocked by client firewall.", "warning");
-                this.ipDisplay.innerText = "SRC: HIDDEN";
-            }
+                
+                // Прибираємо за собою (видаляємо функцію)
+                delete window.processHackerIP;
+            };
+
+            // 2. Створюємо тег <script> динамічно
+            const script = document.createElement('script');
+            // format=jsonp змушує сервер віддати не просто дані, а код: processHackerIP({"ip":"..."})
+            script.src = 'https://api.ipify.org?format=jsonp&callback=processHackerIP';
+            
+            script.onerror = () => {
+                this.log("NET_WARN", "Payload execution blocked by client firewall.", "warning");
+                this.ipDisplay.innerText = "SRC: BLOCKED";
+            };
+
+            // 3. Додаємо скрипт на сторінку -> браузер виконує його -> викликається processHackerIP
+            document.body.appendChild(script);
+            
+            // Видаляємо тег після завантаження, щоб не смітити в DOM
+            script.onload = () => {
+                document.body.removeChild(script);
+            };
         },
 
         // 2. Отримання User Agent та параметрів екрану
