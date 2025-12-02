@@ -304,65 +304,63 @@
             this.out.scrollTop = this.out.scrollHeight;
         },
 
-        // 1. Отримання реального IP
-            checkIP: async function() {
-            this.log("NET_SCAN", "Resolving incoming connection origin...", "warning");
-            
-            let ip = null;
-            let provider = "";
+// 1. Отримання реального IP 
+    checkIP: async function() {
+    this.log("NET_SCAN", "Resolving incoming connection origin...", "warning");
+    
+    let ip = null;
+    let provider = "";
 
-            // СПРОБА 1: Cloudflare Trace (Найкраще для Firefox і Chrome)
-            // Браузери довіряють цьому домену, бо це CDN
-            try {
-                const response = await fetch('https://www.cloudflare.com/cdn-cgi/trace');
-                if (response.ok) {
-                    const text = await response.text();
-                    // Відповідь приходить текстом, шукаємо IP
-                    const match = text.match(/ip=(.+)/);
-                    if (match) {
-                        ip = match[1];
-                        provider = "CLOUDFLARE_NET";
-                    }
-                }
-            } catch (e) {
-                // Якщо заблоковано - мовчки йдемо далі
+    // СПРОБА 1: Cloudflare Trace (Найкраще для Firefox і Chrome)
+    try {
+        const response = await fetch('https://www.cloudflare.com/cdn-cgi/trace');
+        if (response.ok) {
+            const text = await response.text();
+            const match = text.match(/ip=(.+)/);
+            if (match) {
+                ip = match[1];
+                provider = "CLOUDFLARE_NET";
             }
+        }
+    } catch (e) {
+        // Якщо заблоковано, помилка вискочить у консоль, але JS мовчки йде далі
+    }
 
-            // СПРОБА 2: Ipify (Резерв, якщо Cloudflare недоступний)
-            if (!ip) {
-                try {
-                    const response = await fetch('https://api.ipify.org?format=json');
-                    if (response.ok) {
-                        const json = await response.json();
-                        ip = json.ip;
-                        provider = "IPIFY_API";
-                    }
-                } catch (e) {
-                    // Якщо і це заблоковано - ігноруємо
-                }
+    // СПРОБА 2: Ipify (Резерв)
+    if (!ip) {
+        try {
+            const response = await fetch('https://api.ipify.org?format=json');
+            if (response.ok) {
+                const json = await response.json();
+                ip = json.ip;
+                provider = "IPIFY_API";
             }
+        } catch (e) {
+            // Мовчки ігноруємо
+        }
+    }
 
-            // РЕЗУЛЬТАТ
-            if (ip) {
-                // Якщо IP знайдено (реальний злам)
-                this.log("ALERT", `UNAUTHORIZED ACCESS DETECTED FROM: ${ip}`, "critical");
-                this.log("TRACE", `ISP/ASN Lookup initiated via ${provider}...`, "critical");
-                this.ipDisplay.innerText = `SRC: ${ip}`;
-                this.ipDisplay.style.color = "#f00";
-            } else {
-                // Якщо всі спроби провалилися (uBlock / NoScript / ETP)
-
-                // 1. Сюжетне повідомлення про успіх захисту (для гравця)
-                this.log("SUCCESS", "CLIENT ENVIRONMENT CHECK COMPLETE", "success");
-                this.log("TRACE", "Status: Anti-Tracking Shield Active.", "success");
-                this.log("FIREWALL", "Note: Console errors below are a sign of successful privacy protection.", "success");
-                
-                // 2. Інформація для HUD
-                this.log("LOCAL", "Detected: LOCALHOST (Proxy/VPN enforced)", "critical");
-                this.ipDisplay.innerText = "SRC: SECURE";
-                this.ipDisplay.style.color = "#00ff41"; // Зелений колір як успіх
-            }
-        },
+    // РЕЗУЛЬТАТ (Сюжетна обробка)
+    if (ip) {
+        // УСПІХ: IP знайдено
+        this.log("ALERT", `UNAUTHORIZED ACCESS DETECTED FROM: ${ip}`, "critical");
+        this.log("TRACE", `ISP/ASN Lookup initiated via ${provider}...`, "critical");
+        this.ipDisplay.innerText = `SRC: ${ip}`;
+        this.ipDisplay.style.color = "#f00"; // Червоний: Успіх злому
+    } else {
+        // ПОВНЕ БЛОКУВАННЯ: uBlock/ETP переміг
+        
+        // 1. Сюжетне повідомлення про успіх захисту (для гравця)
+        this.log("SUCCESS", "CLIENT ENVIRONMENT CHECK COMPLETE", "success");
+        this.log("TRACE", "Status: Anti-Tracking Shield Active.", "success");
+        this.log("FIREWALL", "Note: Console errors below are a sign of successful privacy protection.", "success");
+        
+        // 2. Інформація для HUD
+        this.log("LOCAL", "Detected: LOCALHOST (Anti-Tracking)", "critical");
+        this.ipDisplay.innerText = "SRC: SECURE";
+        this.ipDisplay.style.color = "#00ff41"; // Зелений: Захист спрацював
+    }
+},
                 
                 
         // 2. Отримання User Agent та параметрів екрану
