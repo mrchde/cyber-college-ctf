@@ -304,41 +304,57 @@
             this.out.scrollTop = this.out.scrollHeight;
         },
 
-        // 1. Отримання реального IP
-            checkIP: async function() {
+        // 1. Отримання реального IPcheckIP: async function() {
             this.log("NET_SCAN", "Resolving incoming connection origin...", "warning");
+            
+            let ip = null;
+            let provider = "";
 
+            // СПРОБА 1: Cloudflare Trace (Найкраще для Firefox і Chrome)
+            // Браузери довіряють цьому домену, бо це CDN
             try {
-                // 1. Пробуємо отримати реальну IP (один раз)
-                const response = await fetch('https://api.ipify.org?format=json');
-
-                // Якщо сервер відповів помилкою (наприклад, 403 або 500)
-                if (!response.ok) throw new Error("Connection Blocked");
-
-                const json = await response.json();
-
-                // УСПІХ: Показуємо реальну IP
-                this.log("ALERT", `UNAUTHORIZED ACCESS DETECTED FROM: ${json.ip}`, "critical");
-                this.log("TRACE", `ISP/ASN Lookup initiated for ${json.ip}...`, "critical");
-                this.ipDisplay.innerText = `SRC: ${json.ip}`;
-                this.ipDisplay.style.color = "#f00";
-
+                const response = await fetch('https://www.cloudflare.com/cdn-cgi/trace');
+                if (response.ok) {
+                    const text = await response.text();
+                    // Відповідь приходить текстом, шукаємо IP
+                    const match = text.match(/ip=(.+)/);
+                    if (match) {
+                        ip = match[1];
+                        provider = "CLOUDFLARE_NET";
+                    }
+                }
             } catch (e) {
-                // ПОМИЛКА (uBlock, CORS, немає інтернету)
-                // Спрацьовує миттєво після першої невдачі
+                // Якщо заблоковано - мовчки йдемо далі
+            }
 
-                // Логуємо в ігровий термінал, що "захист" спрацював
-                this.log("FIREWALL", "Client-side privacy shield detected (uBlock/AdGuard).", "warning");
-                this.log("NET_WARN", "External tracing failed. Connection is proxied.", "warning");
+            // СПРОБА 2: Ipify (Резерв, якщо Cloudflare недоступний)
+            if (!ip) {
+                try {
+                    const response = await fetch('https://api.ipify.org?format=json');
+                    if (response.ok) {
+                        const json = await response.json();
+                        ip = json.ip;
+                        provider = "IPIFY_API";
+                    }
+                } catch (e) {
+                    // Якщо і це заблоковано - ігноруємо
+                }
+            }
 
-                // Переходимо в режим локалхоста
+            // РЕЗУЛЬТАТ
+            if (ip) {
+                // Якщо IP знайдено (реальний злам)
+                this.log("ALERT", `UNAUTHORIZED ACCESS DETECTED FROM: ${ip}`, "critical");
+                this.log("TRACE", `ISP/ASN Lookup initiated via ${provider}...`, "critical");
+                this.ipDisplay.innerText = `SRC: ${ip}`;
+                this.ipDisplay.style.color = "#f00";
+            } else {
+                // Якщо все заблоковано (uBlock / NoScript / Corporate Firewall)
+                this.log("FIREWALL", "Connection filtered by client-side security.", "warning");
                 this.log("LOCAL", "Detected: 127.0.0.1 / Localhost", "critical");
                 this.ipDisplay.innerText = "SRC: LOCALHOST";
-
-                // Більше ніяких спроб не робимо
             }
         },
-
         // 2. Отримання User Agent та параметрів екрану
         checkFingerprint: function() {
             const ua = navigator.userAgent;
