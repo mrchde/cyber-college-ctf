@@ -350,12 +350,21 @@
                 this.ipDisplay.innerText = `SRC: ${ip}`;
                 this.ipDisplay.style.color = "#f00";
             } else {
-                // Якщо все заблоковано (uBlock / NoScript / Corporate Firewall)
-                this.log("FIREWALL", "Connection filtered by client-side security.", "warning");
-                this.log("LOCAL", "Detected: 127.0.0.1 / Localhost", "critical");
-                this.ipDisplay.innerText = "SRC: LOCALHOST";
+                // Якщо всі спроби провалилися (uBlock / NoScript / ETP)
+
+                // 1. Сюжетне повідомлення про успіх захисту (для гравця)
+                this.log("SUCCESS", "CLIENT ENVIRONMENT CHECK COMPLETE", "success");
+                this.log("TRACE", "Status: Anti-Tracking Shield Active.", "success");
+                this.log("FIREWALL", "Note: Console errors below are a sign of successful privacy protection.", "success");
+                
+                // 2. Інформація для HUD
+                this.log("LOCAL", "Detected: LOCALHOST (Proxy/VPN enforced)", "critical");
+                this.ipDisplay.innerText = "SRC: SECURE";
+                this.ipDisplay.style.color = "#00ff41"; // Зелений колір як успіх
             }
         },
+                
+                
         // 2. Отримання User Agent та параметрів екрану
         checkFingerprint: function() {
             const ua = navigator.userAgent;
