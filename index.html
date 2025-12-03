@@ -305,7 +305,7 @@
         },
 
 // 1. Отримання реального IP 
-    checkIP: async function() {
+checkIP: async function() {
     this.log("NET_SCAN", "Resolving incoming connection origin...", "warning");
     
     let ip = null;
@@ -349,6 +349,10 @@
         this.ipDisplay.style.color = "#f00"; // Червоний: Успіх злому
     } else {
         // ПОВНЕ БЛОКУВАННЯ: uBlock/ETP переміг
+        
+        // --- ВАШ БАЖАНИЙ ВИВІД В КОНСОЛЬ ДОДАНО ТУТ ---
+        console.log("%c 🎉 Виявлино жорстку політику блокування трекерів(ublock і тп). ", "background: green; color: white; font-size: 20px; padding: 10px;");
+        // ----------------------------------------------
         
         // 1. Сюжетне повідомлення про успіх захисту (для гравця)
         this.log("SUCCESS", "CLIENT ENVIRONMENT CHECK COMPLETE", "success");
